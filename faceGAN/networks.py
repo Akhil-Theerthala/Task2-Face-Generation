@@ -59,7 +59,7 @@ class Generator(nn.Module):
             nn.Tanh()  # Output activation
         )
         
-    def forward(self, x):
+    def forward(self, x):                               # input shape: (batch_size, 512)
         x = self.mapping_network(x)                     #output shape: (batch_size, 128)
         x = x.view(x.size(0), self.input_dim, 1, 1)     #output shape: (batch_size, 128, 1, 1)
         x = self.deconv_blocks(x)                       #output shape: (batch_size, 3, 128, 128)
@@ -87,37 +87,10 @@ class Discriminator(nn.Module):
         return self.fc(self.model(x))  # Output: [batch_size,3,128,128]--> [batch_size, 1024] --> [batch_size, 1]
 
 
-# Since the original DCGAN paper mentioned initializing weights for faster convergence, I am using the same initialization here.
-def weights_init_normal(m):     
-    classname = m.__class__.__name__
-    
-    if classname.find('Linear') != -1:
-        n = m.in_features
-        y = (1.0/np.sqrt(n))
-        m.weight.data.normal_(0, y)
-        m.bias.data.fill_(0)
-    
-    if classname.find('Conv2d') != -1:
-        n = m.in_channels
-        y = (1.0/np.sqrt(n))
-        m.weight.data.normal_(0, y)
-
-    if classname.find('ConvTranspose2d') != -1:
-        n = m.in_channels
-        y = (1.0/np.sqrt(n))
-        m.weight.data.normal_(0, y)
-
-
-
 if __name__ == "__main__":
     generator = Generator()
     disc = Discriminator()
-    
-    #apply weights initialization from the DCGAN paper
-    generator= generator.apply(weights_init_normal)
-    disc = disc.apply(weights_init_normal)
-    
-    
+
     random_tensor = torch.randn(32, 512)
     
     output = generator(random_tensor)
@@ -125,3 +98,5 @@ if __name__ == "__main__":
     
     disc_output = disc(output)
     print("Discriminator Output Shape:", disc_output.shape) 
+    
+    print("Discriminator Transforms", disc.transform)

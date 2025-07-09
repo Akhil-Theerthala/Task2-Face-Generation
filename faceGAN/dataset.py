@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
+from timm.data.transforms import MaybeToTensor, RandomResizedCropAndInterpolation
 
 random.seed(42)  # For reproducibility
 
@@ -22,9 +23,11 @@ class FaceDataset(Dataset):
             raise ValueError(f"No images found in directory: {image_dir}")
         
         self.to_latent = transforms.Compose([
-            transforms.Resize((128, 128)),
-            transforms.ToTensor(),
-            transforms.Normalize(0.5, 0.5)
+            RandomResizedCropAndInterpolation(size=(128, 128), scale=(0.08, 1.0), ratio=(0.75, 1.3333), interpolation='bicubic'),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.ColorJitter(brightness=(0.6, 1.4), contrast=(0.6, 1.4), saturation=(0.6, 1.4), hue=None),
+            MaybeToTensor(),
+            transforms.Normalize(mean=[0.4850, 0.4560, 0.4060], std=[0.2290, 0.2240, 0.2250])
             ])
         
     

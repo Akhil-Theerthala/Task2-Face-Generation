@@ -2,24 +2,25 @@ import os
 import torch
 import numpy as np
 import wandb
+import dotenv
 from torch import nn 
+from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
 from faceGAN.dataset import FaceDataset
 from faceGAN.networks import Generator, Discriminator
 from dataclasses import dataclass
 
-os.environ["WANDB_API_KEY"] ="api_key"
-
+os.environ["WANDB_API_KEY"] =dotenv.get_key('.env', 'WANDB_API_KEY')
 
 @dataclass
 class TrainingDetails:
-    batch_size: int = 32
+    batch_size: int = 64
     val_batch_size: int = 16
     num_epochs: int = 30
     learning_rate: float = 3e-4
     beta1: float = 0.5
     beta2: float = 0.999
-    device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device: str = 'mps' if torch.backends.mps.is_available() else 'cpu'
     train_dir: str = 'data/train'
     val_dir: str = 'data/val'
     
@@ -29,6 +30,11 @@ class TrainingDetails:
 class Trainer:
     def __init__(self, config: TrainingDetails):
         self.config = config
+        
+        if torch.backends.mps.is_available():
+            print("Using MPS backend for training.")
+        else:
+            print("MPS backend not available, using CPU.")
         
         self.train_dataset = FaceDataset(self.config.train_dir)
         self.train_loader = DataLoader(self.train_dataset, batch_size=self.config.batch_size, shuffle=True)
@@ -40,6 +46,7 @@ class Trainer:
         self.discriminator = Discriminator().to(self.config.device)
         
         
+        self.criterion = nn.BCEWithLogitsLoss()
         #initialize optimizers
         self.disc_optimizer = torch.optim.Adam(
             self.discriminator.parameters(),
@@ -54,20 +61,16 @@ class Trainer:
         )
     
     def get_real_loss(self, disc_out):
-        batch_size = disc_out.size(0)
-        real_labels = torch.ones(batch_size, 1, device=self.config.device)
+        real_labels = torch.ones_like(disc_out, device=self.config.device)
         real_labels = real_labels*0.9
         
-        criterion = nn.BCEWithLogitsLoss()
-        loss = criterion(disc_out.squeeze(), real_labels)
+        loss = self.criterion(disc_out, real_labels)
         return loss
 
     def get_fake_loss(self, disc_out):
-        batch_size = disc_out.size(0)
-        fake_labels = torch.zeros(batch_size, 1, device=self.config.device)
-        
-        criterion = nn.BCEWithLogitsLoss()
-        loss = criterion(disc_out.squeeze(), fake_labels)
+        fake_labels = torch.zeros_like(disc_out, device=self.config.device)
+        fake_labels = fake_labels+0.1
+        loss = self.criterion(disc_out, fake_labels)
         return loss
     
     def train_step(self, batch):
@@ -106,13 +109,13 @@ class Trainer:
         }
     
     def train(self):
-        for epoch in range(self.config.num_epochs):
+        for epoch in tqdm(range(self.config.num_epochs)):
             
             self.discriminator.train()
             self.generator.train()
             
             epoch_loss = {'disc_loss': 0, 'gen_loss': 0}
-            for batch in self.train_loader:
+            for batch in tqdm(self.train_loader):
                 losses = self.train_step(batch)
                 epoch_loss['disc_loss'] += losses['disc_loss']
                 epoch_loss['gen_loss'] += losses['gen_loss']
@@ -133,7 +136,7 @@ class Trainer:
                 'epoch/avg_gen_loss': epoch_loss['gen_loss']
             })
 
-            if (epoch+1)%5 == 0:
+            if (epoch+1)%2 == 0:
                 self.log_generator_images()
         # Save the model checkpoints
         torch.save(self.generator.state_dict(), 'generator.pth')
@@ -151,25 +154,26 @@ class Trainer:
         fake_images = (fake_images + 1) / 2
         fake_images = fake_images.clamp(0, 1)
         
+        real_images = (real_images + 1) / 2
+        real_images = real_images.clamp(0, 1)
+        
         #tensor to numpy
-        fake_images = fake_images.cpu().numpy()
-        real_images = real_images.cpu().numpy()
+        fake_images = fake_images.cpu().numpy().transpose(0, 2, 3, 1)  # Convert to [batch_size, height, width, channels]
+        real_images = real_images.cpu().numpy().transpose(0, 2, 3, 1)  # Convert to [batch_size, height, width, channels]
         
         # Log images to wandb
-        grid = wandb.Image(fake_images, caption="Generated Images")
-        wandb.log({"generated_images": grid})
-        
-        #real images
-        real_grid = wandb.Image(real_images, caption="Real Images")
-        wandb.log({"real_images": real_grid})
+        wandb.log({
+            'generated_images': [wandb.Image(img) for img in fake_images[:num_images]],
+            'real_images': [wandb.Image(img) for img in real_images[:num_images]]
+        })
     
 def main():
     config = TrainingDetails()
     trainer = Trainer(config)
     # Initialize wandb
     wandb.init(
-        project="face-generation-gan",
-        name = "face-generation-gan-training",
+        project="face-generation-gan-mps",
+        name = "face-generation-gan-training-exp1",
         dir="./wandb_logs",
         notes="Training a GAN for face generation using a simple deconv generator and a fastvit discriminator.",
         config=config.__dict__,  

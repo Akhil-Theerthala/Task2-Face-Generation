@@ -26,19 +26,20 @@ class Generator(nn.Module):
         self.output_channels = output_channels
         self.output_image_dim = output_image_dim
         
-        self.fc = nn.Linear(input_dim, 64*4*4*4)
+        self.fc = nn.Linear(input_dim, 16*4*4*4)
         self.deconv_blocks = nn.Sequential(
-            SimpleDeConvBlock(256, 128, kernel_size=4, stride=2, padding=1),                    #(batch_size, 256, 4, 4)  ----> (batch_size, 128, 8, 8)
-            SimpleDeConvBlock(128, 64, kernel_size=4, stride=2, padding=1),                     #(batch_size, 128, 8, 8) -----> (batch_size, 64,16, 16)
-            SimpleDeConvBlock(64, 32, kernel_size=4, stride=2, padding=1),                      #(batch_size, 64, 16, 16) ---> (batch_size, 32, 32, 32)
-            SimpleDeConvBlock(32, 16, kernel_size=4, stride=2, padding=1),                      #(batch_size, 32, 32, 32) ---> (batch_size, 16, 64, 64)
-            nn.ConvTranspose2d(16, 3, kernel_size=4, stride=2, padding=1),                      #(batch_size, 16, 64, 64) --> (batch_size, 3, 128, 128)
+            SimpleDeConvBlock(64, 32, kernel_size=4, stride=2, padding=1),                    #(batch_size, 64, 4, 4)  ----> (batch_size, 32, 8, 8)
+            SimpleDeConvBlock(32, 16, kernel_size=4, stride=2, padding=1),                     #(batch_size, 32, 8, 8) -----> (batch_size, 16,16, 16)
+            SimpleDeConvBlock(16, 8, kernel_size=4, stride=2, padding=1),                      #(batch_size, 16, 16, 16) ---> (batch_size, 8, 32, 32)
+            SimpleDeConvBlock(8, 4, kernel_size=4, stride=2, padding=1),                      #(batch_size, 8, 32, 32) ---> (batch_size, 4, 64, 64)
+            nn.ConvTranspose2d(4, 3, kernel_size=4, stride=2, padding=1),                      #(batch_size, 4, 64, 64) --> (batch_size, 3, 128, 128)
             nn.Tanh()  # Output activation
         )
         
     def forward(self, x):  # input shape: (batch_size, 512)       
+        x = x+ 0.01*torch.randn_like(x)  # Adding noise to the input
         x = self.fc(x)
-        x = x.view(-1,64*4,4,4)                        # Reshape to (batch_size, 256, 4, 4)
+        x = x.view(-1,16*4,4,4)                        # Reshape to (batch_size, 256, 4, 4)
         x = self.deconv_blocks(x)                      # output shape: (batch_size, 3, 128, 128)
         return x
 
@@ -64,20 +65,49 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         
         self.conv_head= nn.Sequential(
-            SimpleConvBlock(3, 8, kernel_size=4, stride=2, padding=1),   #(batch_size, 3, 128, 128) --> (batch_size, 8, 32, 32)
-            SimpleConvBlock(8, 16, kernel_size=4, stride=2, padding=1),  #(batch_size, 8, 32, 32) ----> (batch_size, 16, 8, 8)
-            SimpleConvBlock(16, 32, kernel_size=4, stride=2, padding=1), #(batch_size, 16, 8, 8) -----> (batch_size, 32, 2, 2)
+            SimpleConvBlock(3, 4, kernel_size=4, stride=2, padding=1),   #(batch_size, 3, 128, 128) --> (batch_size, 4, 32, 32)
+            SimpleConvBlock(4, 8, kernel_size=4, stride=2, padding=1),  #(batch_size, 4, 32, 32) ----> (batch_size, 8, 8, 8)
+            SimpleConvBlock(8, 16, kernel_size=4, stride=2, padding=1), #(batch_size, 8, 8, 8) -----> (batch_size, 16, 2, 2)
         )
         
         self.linear_head = nn.Sequential(
             nn.Flatten(),  # Flatten the output from conv layers
-            nn.Linear(32 * 2 * 2, 32),  # Fully connected layer to reduce dimensions
+            nn.Linear(16 * 2 * 2, 16),  # Fully connected layer to reduce dimensions
             nn.GELU(),
-            nn.Linear(32, 1)  # Final output layer for binary classification
+            nn.Linear(16, 1)  # Final output layer for binary classification
         )
 
     def forward(self, x):
         return self.linear_head(self.conv_head(x))  # Output: [batch_size,3,128,128]--> [batch_size, 1]
+
+def weights_init_normal(m):
+    """
+    Applies initial weights to certain layers in a model .
+    The weights are taken from a normal distribution 
+    with mean = 0, std dev = 0.02.
+    :param m: A module or layer in a network    
+    """
+    # classname will be something like:
+    # `Conv`, `BatchNorm2d`, `Linear`, etc.
+    classname = m.__class__.__name__
+    
+    # TODO: Apply initial weights to convolutional and linear layers
+    if classname.find('Linear') != -1:
+        n = m.in_features
+        y = (1.0/np.sqrt(n))
+        m.weight.data.normal_(0, y)
+        m.bias.data.fill_(0)
+    
+    if classname.find('Conv2d') != -1:
+        n = m.in_channels
+        y = (1.0/np.sqrt(n))
+        m.weight.data.normal_(0, y)
+
+    if classname.find('ConvTranspose2d') != -1:
+        n = m.in_channels
+        y = (1.0/np.sqrt(n))
+        m.weight.data.normal_(0, y)
+    
 
 
 if __name__ == "__main__":

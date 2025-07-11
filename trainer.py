@@ -7,7 +7,7 @@ from torch import nn
 from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
 from faceGAN.dataset import FaceDataset
-from faceGAN.networks import Generator, Discriminator
+from faceGAN.networks import Generator, Discriminator, weights_init_normal
 from dataclasses import dataclass
 
 os.environ["WANDB_API_KEY"] =dotenv.get_key('.env', 'WANDB_API_KEY')
@@ -16,8 +16,8 @@ os.environ["WANDB_API_KEY"] =dotenv.get_key('.env', 'WANDB_API_KEY')
 class TrainingDetails:
     batch_size: int = 64
     val_batch_size: int = 16
-    num_epochs: int = 30
-    learning_rate: float = 3e-4
+    num_epochs: int = 100
+    learning_rate: float = 1e-4
     beta1: float = 0.5
     beta2: float = 0.999
     device: str = 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -45,6 +45,9 @@ class Trainer:
         self.generator = Generator().to(self.config.device)
         self.discriminator = Discriminator().to(self.config.device)
         
+        #apply weight initialization
+        self.generator.apply(weights_init_normal)
+        self.discriminator.apply(weights_init_normal)
         
         self.criterion = nn.BCEWithLogitsLoss()
         #initialize optimizers
@@ -60,16 +63,17 @@ class Trainer:
             betas=(self.config.beta1, self.config.beta2)
         )
     
+    
     def get_real_loss(self, disc_out):
         real_labels = torch.ones_like(disc_out, device=self.config.device)
-        real_labels = real_labels*0.9
+        real_labels = real_labels*0.95
         
         loss = self.criterion(disc_out, real_labels)
         return loss
 
     def get_fake_loss(self, disc_out):
         fake_labels = torch.zeros_like(disc_out, device=self.config.device)
-        fake_labels = fake_labels+0.1
+        fake_labels = fake_labels+0.05
         loss = self.criterion(disc_out, fake_labels)
         return loss
     
@@ -173,7 +177,7 @@ def main():
     # Initialize wandb
     wandb.init(
         project="face-generation-gan-mps",
-        name = "face-generation-gan-training-exp1",
+        name = "exp4-smaller-GnD",
         dir="./wandb_logs",
         notes="Training a GAN for face generation using a simple deconv generator and a fastvit discriminator.",
         config=config.__dict__,  

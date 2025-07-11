@@ -40,25 +40,10 @@ class FaceDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.image_dir, self.image_files[idx])
-        pil_image = Image.open(img_path).convert('RGB')
-        
-        flip_prob=0.2
-        if random.random() < flip_prob:
-            pil_image = pil_image.transpose(Image.FLIP_LEFT_RIGHT)
-        
-        crop_prob=0.15
-        if random.random() < crop_prob:
-            width, height = pil_image.size
-            left = int(width * 0.05)
-            top = int(height * 0.05)
-            right = int(width * 0.95)
-            bottom = int(height * 0.95)
-            pil_image = pil_image.crop((left, top, right, bottom))
-        
+        pil_image = Image.open(img_path).convert('RGB')        
         embedding = self.get_embedding(pil_image)
         
         image = self.to_latent(pil_image)
-        
         return {
             'image': image,
             'embedding': embedding

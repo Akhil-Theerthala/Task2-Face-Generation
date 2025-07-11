@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from torch import nn
+from torch.nn.utils import spectral_norm
 
 class SimpleDeConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=4, stride=2, padding=1):
@@ -9,12 +10,13 @@ class SimpleDeConvBlock(nn.Module):
             in_channels, out_channels, kernel_size, stride, padding
         )
         self.bn = nn.BatchNorm2d(out_channels)
-        self.gelu = nn.GELU()
+        self.leaky_relu = nn.LeakyReLU(0.2)
+
 
     def forward(self, x):
         x = self.deconv(x)
         x = self.bn(x)
-        x = self.gelu(x)
+        x = self.leaky_relu(x)
         return x
 
 
@@ -26,20 +28,20 @@ class Generator(nn.Module):
         self.output_channels = output_channels
         self.output_image_dim = output_image_dim
         
-        self.fc = nn.Linear(input_dim, 16*4*4*4)
+        self.fc = nn.Linear(input_dim, 128*4*4*4)
         self.deconv_blocks = nn.Sequential(
-            SimpleDeConvBlock(64, 32, kernel_size=4, stride=2, padding=1),                    #(batch_size, 64, 4, 4)  ----> (batch_size, 32, 8, 8)
-            SimpleDeConvBlock(32, 16, kernel_size=4, stride=2, padding=1),                     #(batch_size, 32, 8, 8) -----> (batch_size, 16,16, 16)
-            SimpleDeConvBlock(16, 8, kernel_size=4, stride=2, padding=1),                      #(batch_size, 16, 16, 16) ---> (batch_size, 8, 32, 32)
-            SimpleDeConvBlock(8, 4, kernel_size=4, stride=2, padding=1),                      #(batch_size, 8, 32, 32) ---> (batch_size, 4, 64, 64)
-            nn.ConvTranspose2d(4, 3, kernel_size=4, stride=2, padding=1),                      #(batch_size, 4, 64, 64) --> (batch_size, 3, 128, 128)
+            SimpleDeConvBlock(512, 256, kernel_size=4, stride=2, padding=1),                     #(batch_size, 512, 4, 4)  ------> (batch_size, 256, 8, 8)
+            SimpleDeConvBlock(256, 128, kernel_size=4, stride=2, padding=1),                     #(batch_size, 256, 8, 8) -----> (batch_size, 128, 16, 16)
+            SimpleDeConvBlock(128, 64, kernel_size=4, stride=2, padding=1),                      #(batch_size, 128, 16, 16) ---> (batch_size, 64,  32, 32)
+            SimpleDeConvBlock(64, 32, kernel_size=4, stride=2, padding=1),                       #(batch_size, 64,  32, 32) ----> (batch_size, 32, 64, 64)
+            nn.ConvTranspose2d(32, output_channels, kernel_size=4, stride=2, padding=1),         #(batch_size, 32, 64, 64) ----> (batch_size, 3, 128, 128)
             nn.Tanh()  # Output activation
         )
         
     def forward(self, x):  # input shape: (batch_size, 512)       
-        x = x+ 0.01*torch.randn_like(x)  # Adding noise to the input
+        x = x+ 0.1*torch.randn_like(x)  # Adding noise to the input
         x = self.fc(x)
-        x = x.view(-1,16*4,4,4)                        # Reshape to (batch_size, 256, 4, 4)
+        x = x.view(-1,128*4,4,4)                        # Reshape to (batch_size, 512, 4, 4)
         x = self.deconv_blocks(x)                      # output shape: (batch_size, 3, 128, 128)
         return x
 
@@ -47,16 +49,13 @@ class Generator(nn.Module):
 class SimpleConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=4, stride=2, padding=1):
         super(SimpleConvBlock, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
-        self.bn = nn.BatchNorm2d(out_channels)
-        self.gelu = nn.GELU()
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.conv = nn.Sequential(
+            spectral_norm(nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
         
     def forward(self, x):
         x = self.conv(x)
-        x = self.bn(x)
-        x = self.gelu(x)
-        x = self.pool(x)
         return x
 
 #using a simple fastvit image encoder for discriminator
@@ -65,20 +64,19 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         
         self.conv_head= nn.Sequential(
-            SimpleConvBlock(3, 4, kernel_size=4, stride=2, padding=1),   #(batch_size, 3, 128, 128) --> (batch_size, 4, 32, 32)
-            SimpleConvBlock(4, 8, kernel_size=4, stride=2, padding=1),  #(batch_size, 4, 32, 32) ----> (batch_size, 8, 8, 8)
-            SimpleConvBlock(8, 16, kernel_size=4, stride=2, padding=1), #(batch_size, 8, 8, 8) -----> (batch_size, 16, 2, 2)
-        )
-        
-        self.linear_head = nn.Sequential(
-            nn.Flatten(),  # Flatten the output from conv layers
-            nn.Linear(16 * 2 * 2, 16),  # Fully connected layer to reduce dimensions
-            nn.GELU(),
-            nn.Linear(16, 1)  # Final output layer for binary classification
+            SimpleConvBlock(3, 64, kernel_size=4, stride=2, padding=1),    #(batch_size, 3, 128, 128) --> (batch_size, 64, 64, 64)
+            SimpleConvBlock(64, 128, kernel_size=4, stride=2, padding=1),  #(batch_size, 64, 64, 64) ----> (batch_size, 128, 32, 32)
+            SimpleConvBlock(128, 256, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 32, 32) -----> (batch_size, 256, 16, 16)
+            SimpleConvBlock(256, 512, kernel_size=4, stride=2, padding=1), #(batch_size, 256, 16, 16) -----> (batch_size, 512, 8, 8)
+            SimpleConvBlock(512, 1024, kernel_size=4, stride=2, padding=1), #(batch_size, 512, 8, 8) -----> (batch_size, 1024, 4, 4)
+            nn.Conv2d(1024, 1, kernel_size=4, stride=1, padding=0)  # Final output layer for binary classification
         )
 
+
     def forward(self, x):
-        return self.linear_head(self.conv_head(x))  # Output: [batch_size,3,128,128]--> [batch_size, 1]
+        x = self.conv_head(x)  # Input shape: [batch_size, 3, 128, 128] Output shape: [batch_size, 1, 1, 1]
+        x = x.view(x.size(0), 1)  # Flatten to [batch_size, 1]
+        return x
 
 def weights_init_normal(m):
     """
@@ -114,10 +112,11 @@ if __name__ == "__main__":
     generator = Generator()
     disc = Discriminator()
 
-    random_tensor = torch.randn(32, 512,4,4)
+    random_tensor = torch.randn(32, 512)
 
     output = generator(random_tensor)
     print("Generator Output Shape:", output.shape)  
     
-    # disc_output = disc(output)
-    # print("Discriminator Output Shape:", disc_output.shape) 
+    
+    disc_output = disc(output)
+    print("Discriminator Output Shape:", disc_output.view(disc_output.size(0), -1).shape) 

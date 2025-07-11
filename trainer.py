@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import wandb
 import dotenv
+import torch.nn.functional as F
 from torch import nn 
 from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
@@ -17,7 +18,8 @@ class TrainingDetails:
     batch_size: int = 64
     val_batch_size: int = 16
     num_epochs: int = 100
-    learning_rate: float = 1e-4
+    discriminator_learning_rate: float = 3e-4
+    generator_learning_rate: float = 2e-4
     beta1: float = 0.5
     beta2: float = 0.999
     device: str = 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -53,81 +55,87 @@ class Trainer:
         #initialize optimizers
         self.disc_optimizer = torch.optim.Adam(
             self.discriminator.parameters(),
-            lr=self.config.learning_rate,
+            lr=self.config.discriminator_learning_rate,
             betas=(self.config.beta1, self.config.beta2)
         )
         
         self.gen_optimizer = torch.optim.Adam(
             self.generator.parameters(),
-            lr=self.config.learning_rate,
+            lr=self.config.generator_learning_rate,
             betas=(self.config.beta1, self.config.beta2)
         )
     
     
     def get_real_loss(self, disc_out):
-        real_labels = torch.ones_like(disc_out, device=self.config.device)
-        real_labels = real_labels*0.95
-        
-        loss = self.criterion(disc_out, real_labels)
-        return loss
+        return F.softplus(-disc_out).mean()  # Using softplus for real loss
 
     def get_fake_loss(self, disc_out):
-        fake_labels = torch.zeros_like(disc_out, device=self.config.device)
-        fake_labels = fake_labels+0.05
-        loss = self.criterion(disc_out, fake_labels)
-        return loss
+        return F.softplus(disc_out).mean()  # Using softplus for fake loss
     
-    def train_step(self, batch):
+    def train_step(self, batch, batch_step,  update_disc_every=3):
         real_images = batch['image'].to(self.config.device)
         embeddings = batch['embedding'].to(self.config.device)
         
-        # Train Discriminator
-        self.disc_optimizer.zero_grad()
-        
-        # Real images
-        disc_real_out = self.discriminator(real_images)
-        real_loss = self.get_real_loss(disc_real_out)
-        
         # Fake images
         fake_images = self.generator(embeddings)
-        disc_fake_out = self.discriminator(fake_images.detach())
-        fake_loss = self.get_fake_loss(disc_fake_out)
-        
-        disc_loss = real_loss + fake_loss
-        disc_loss.backward()
-        self.disc_optimizer.step()
-        
-        # Train Generator
-        self.gen_optimizer.zero_grad()
-        
+        # fake_images = torch.randn_like(real_images)   # i.i.d noise
+        condition = (batch_step%update_disc_every==0) | (batch_step <22)
+        if condition:
+            # Real images
+            disc_real_out = self.discriminator(real_images)
+            real_loss = self.get_real_loss(disc_real_out)
+            disc_fake_out = self.discriminator(fake_images.detach())
+            fake_loss = self.get_fake_loss(disc_fake_out)
+    
+            disc_loss = real_loss + fake_loss
+            disc_loss.backward()
+            
+            self.disc_optimizer.step()
+            self.disc_optimizer.zero_grad()
+                
         disc_fake_out_gen = self.discriminator(fake_images)
         gen_loss = self.get_real_loss(disc_fake_out_gen)
         
         gen_loss.backward()
         self.gen_optimizer.step()
+
+        self.gen_optimizer.zero_grad()
         
         return {
-            'disc_loss': disc_loss.item(),
+            'disc_loss': disc_loss.item() if condition else -1,
             'gen_loss': gen_loss.item(),
-            'fake_images': fake_images
+            'disc_real_logits_mean': disc_real_out.mean().item() if condition else -1,
+            'disc_fake_logits_mean': disc_fake_out.mean().item() if condition else -1
         }
     
     def train(self):
         for epoch in tqdm(range(self.config.num_epochs)):
-            
-            self.discriminator.train()
-            self.generator.train()
-            
             epoch_loss = {'disc_loss': 0, 'gen_loss': 0}
+            batch_step=0
+            old_disc_info = {'loss': -1, "real_mean": -1, "fake_mean": -1}
             for batch in tqdm(self.train_loader):
-                losses = self.train_step(batch)
+                
+                losses = self.train_step(batch, batch_step=batch_step)
+                
+                if losses['disc_loss'] == -1:
+                    losses['disc_loss'] = old_disc_info['loss']
+                    losses['disc_real_logits_mean'] = old_disc_info['real_mean']
+                    losses['disc_fake_logits_mean'] = old_disc_info['fake_mean']
+                else:
+                    old_disc_info['loss'] = losses['disc_loss']
+                    old_disc_info['real_mean'] = losses['disc_real_logits_mean']
+                    old_disc_info['fake_mean'] = losses['disc_fake_logits_mean']
+                    
+                batch_step += 1
                 epoch_loss['disc_loss'] += losses['disc_loss']
                 epoch_loss['gen_loss'] += losses['gen_loss']
                 
                 wandb.log({
                     'epoch': epoch + 1,
                     'batches/disc_loss': losses['disc_loss'],
-                    'batches/gen_loss': losses['gen_loss']
+                    'batches/gen_loss': losses['gen_loss'],
+                    'batches/disc_real_logits_mean': losses['disc_real_logits_mean'],
+                    'batches/disc_fake_logits_mean': losses['disc_fake_logits_mean']
                 })
             
             # Log the average loss for the epoch
@@ -142,6 +150,8 @@ class Trainer:
 
             if (epoch+1)%2 == 0:
                 self.log_generator_images()
+                self.generator.train()
+                
         # Save the model checkpoints
         torch.save(self.generator.state_dict(), 'generator.pth')
         torch.save(self.discriminator.state_dict(), 'discriminator.pth')
@@ -177,7 +187,7 @@ def main():
     # Initialize wandb
     wandb.init(
         project="face-generation-gan-mps",
-        name = "exp4-smaller-GnD",
+        name = "EXP-7-Managing-disc-steps",
         dir="./wandb_logs",
         notes="Training a GAN for face generation using a simple deconv generator and a fastvit discriminator.",
         config=config.__dict__,  

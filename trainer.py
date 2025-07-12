@@ -15,15 +15,15 @@ os.environ["WANDB_API_KEY"] =dotenv.get_key('.env', 'WANDB_API_KEY')
 
 @dataclass
 class TrainingDetails:
-    batch_size: int = 64
+    batch_size: int = 128
     val_batch_size: int = 16
-    num_epochs: int = 70
+    num_epochs: int = 30
     discriminator_learning_rate: float = 3e-4
     generator_learning_rate: float = 1e-4
     beta1: float = 0.5
     beta2: float = 0.999
     device: str = 'mps' if torch.backends.mps.is_available() else 'cpu'
-    train_dir: str = 'data/train'
+    train_dir: str = 'data/good_baseline_data'
     val_dir: str = 'data/val'
     
     device = torch.device(device) if torch.cuda.is_available() else torch.device('cpu')
@@ -191,7 +191,7 @@ def main():
     # Initialize wandb
     wandb.init(
         project="face-generation-gan-mps",
-        name = "EXP-8-proof-of-concept",
+        name = "Unconditional-Baseline-3",
         dir="./wandb_logs",
         notes="Training a GAN for face generation using a simple deconv generator and a fastvit discriminator.",
         config=config.__dict__,  

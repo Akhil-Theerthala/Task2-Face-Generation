@@ -47,7 +47,10 @@ class FaceDataset(Dataset):
         if random.random() < self.flip_prob:
             pil_image = transforms.functional.hflip(pil_image)
         
-        embedding = self.get_embedding(pil_image)
+        # embedding = self.get_embedding(pil_image)
+        
+        #setting up an unconditional_base_line
+        embedding = torch.randn(1,512)
         
         image = self.to_latent(pil_image)
         return {
@@ -62,3 +65,7 @@ if __name__ == "__main__":
 
     print(train_dataset.__len__(), "training images found.")
     print("TinyViT Transform:", train_dataset.transform)
+    batch = next(iter(train_loader))
+    print("Batch Size:", batch['image'].shape)
+    print("Batch Embedding Shape:", batch['embedding'].shape)
+    

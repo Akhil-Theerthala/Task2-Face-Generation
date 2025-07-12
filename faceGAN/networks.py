@@ -41,22 +41,24 @@ class Generator(nn.Module):
         self.input_dim = input_dim
         self.output_channels = output_channels
         self.output_image_dim = output_image_dim
-        
-        self.fc = nn.Linear(input_dim, 128*4*4*4)
+        self.image_dim = 512
+        self.fc = nn.Linear(input_dim, self.image_dim*4*4)
         self.deconv_blocks = nn.Sequential(
-            SimpleDeConvBlock(512, 512),                     # 512x4x4 → 512x8x8
-            SimpleDeConvBlock(512, 256),                     # 512x8x8 → 256x16x16
-            UpBlock(256, 128),                               # 256x16x16 → 128x32x32
-            UpBlock(128,  64),                               # 128x32x32 → 64x64x64
-            nn.Upsample(scale_factor=2, mode='nearest'),     # 128x32x32 → 128x64x64
-            nn.Conv2d(64, 3, 3, 1, 1),                       # 128x64x64 → 3x64x64
+            SimpleDeConvBlock(self.image_dim,  self.image_dim//2),                   
+            SimpleDeConvBlock(self.image_dim//2,  self.image_dim//4),                 
+            SimpleDeConvBlock(self.image_dim//4,  self.image_dim//8),                 
+            UpBlock(self.image_dim//8, self.image_dim//16),                   
+            UpBlock(self.image_dim//16, self.image_dim//32),                             
+            # UpBlock(128,  64),                           
+            # nn.Upsample(scale_factor=1, mode='nearest'),     
+            nn.Conv2d(self.image_dim//32, 3, 3, 1, 1),  
             nn.Tanh()
         )
         
     def forward(self, x):  # input shape: (batch_size, 512)       
         x = x+ 0.1*torch.randn_like(x)  # Adding noise to the input
         x = self.fc(x)
-        x = x.view(-1,128*4,4,4)                        # Reshape to (batch_size, 512, 4, 4)
+        x = x.view(-1,self.image_dim,4,4)                        # Reshape to (batch_size, 512, 4, 4)
         x = self.deconv_blocks(x)                      # output shape: (batch_size, 3, 64, 64)
         return x
 
@@ -79,18 +81,19 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         
         self.conv_head= nn.Sequential(
-            SimpleConvBlock(3, 64, kernel_size=4, stride=2, padding=1),    #(batch_size, 3, 128, 128) --> (batch_size, 64, 64, 64)
-            SimpleConvBlock(64, 128, kernel_size=4, stride=2, padding=1),  #(batch_size, 64, 64, 64) ----> (batch_size, 128, 32, 32)
-            SimpleConvBlock(128, 256, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 32, 32) -----> (batch_size, 256, 16, 16)
-            SimpleConvBlock(256, 512, kernel_size=4, stride=2, padding=1), #(batch_size, 256, 16, 16) -----> (batch_size, 512, 8, 8)
-            SimpleConvBlock(512, 1024, kernel_size=4, stride=2, padding=1), #(batch_size, 512, 8, 8) -----> (batch_size, 1024, 4, 4)
-            nn.Conv2d(1024, 1, kernel_size=4, stride=1, padding=0)  # Final output layer for binary classification
+            SimpleConvBlock(3, 32, kernel_size=4, stride=2, padding=1),    #(batch_size, 3, 32, 32) --> (batch_size, 32, 16, 16)
+            SimpleConvBlock(32, 64, kernel_size=4, stride=2, padding=1),  #(batch_size, 32, 16, 16) ----> (batch_size, 64, 8, 8)
+            SimpleConvBlock(64, 128, kernel_size=4, stride=2, padding=1), #(batch_size,  64, 8, 8) -----> (batch_size, 128, 4, 4)
+            SimpleConvBlock(128, 256, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
+            SimpleConvBlock(256, 512, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
+            SimpleConvBlock(512, 1024, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
+            nn.Conv2d(1024, 1, kernel_size=2, stride=1, padding=0)  # Final output layer for binary classification
         )
 
 
     def forward(self, x):
         x = self.conv_head(x)  # Input shape: [batch_size, 3, 128, 128] Output shape: [batch_size, 1, 1, 1]
-        x = x.view(x.size(0), 1)  # Flatten to [batch_size, 1]
+        # x = x.view(x.size(0), 1)  # Flatten to [batch_size, 1]
         return x
 
 def weights_init_normal(m):
@@ -127,7 +130,7 @@ if __name__ == "__main__":
     generator = Generator()
     disc = Discriminator()
 
-    random_tensor = torch.randn(32, 512)
+    random_tensor = torch.randn(32,512)
 
         
     output =generator(random_tensor)

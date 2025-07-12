@@ -19,7 +19,7 @@ class TrainingDetails:
     val_batch_size: int = 16
     num_epochs: int = 100
     discriminator_learning_rate: float = 3e-4
-    generator_learning_rate: float = 2e-4
+    generator_learning_rate: float = 1e-4
     beta1: float = 0.5
     beta2: float = 0.999
     device: str = 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -72,14 +72,16 @@ class Trainer:
     def get_fake_loss(self, disc_out):
         return F.softplus(disc_out).mean()  # Using softplus for fake loss
     
-    def train_step(self, batch, batch_step,  update_disc_every=3):
+    def train_step(self, batch, batch_step):
         real_images = batch['image'].to(self.config.device)
         embeddings = batch['embedding'].to(self.config.device)
         
         # Fake images
         fake_images = self.generator(embeddings)
-        # fake_images = torch.randn_like(real_images)   # i.i.d noise
-        condition = (batch_step%update_disc_every==0) | (batch_step <22)
+        # fake_images = torch.randn_like(real_images)   # i.i.d 
+        
+        # 0--10 true; # 11--21 false # 22--32 true # 33--43 false 
+        condition = ((batch_step//4)%2 == 0)
         if condition:
             # Real images
             disc_real_out = self.discriminator(real_images)
@@ -152,9 +154,9 @@ class Trainer:
                 self.log_generator_images()
                 self.generator.train()
                 
-        # Save the model checkpoints
-        torch.save(self.generator.state_dict(), 'generator.pth')
-        torch.save(self.discriminator.state_dict(), 'discriminator.pth')
+            # Save the model checkpoints
+            torch.save(self.generator.state_dict(), 'generator.pth')
+            torch.save(self.discriminator.state_dict(), 'discriminator.pth')
     
     def log_generator_images(self, num_images=16):
         #get a val_batch

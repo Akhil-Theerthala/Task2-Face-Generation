@@ -17,7 +17,7 @@ os.environ["WANDB_API_KEY"] =dotenv.get_key('.env', 'WANDB_API_KEY')
 class TrainingDetails:
     batch_size: int = 64
     val_batch_size: int = 16
-    num_epochs: int = 100
+    num_epochs: int = 70
     discriminator_learning_rate: float = 3e-4
     generator_learning_rate: float = 1e-4
     beta1: float = 0.5
@@ -80,8 +80,10 @@ class Trainer:
         fake_images = self.generator(embeddings)
         # fake_images = torch.randn_like(real_images)   # i.i.d 
         
-        # 0--10 true; # 11--21 false # 22--32 true # 33--43 false 
-        condition = ((batch_step//4)%2 == 0)
+        # condition = ((batch_step//4)%2 == 0)
+        #update every other step
+        condition = (batch_step % 2 == 0)
+        
         if condition:
             # Real images
             disc_real_out = self.discriminator(real_images)
@@ -189,7 +191,7 @@ def main():
     # Initialize wandb
     wandb.init(
         project="face-generation-gan-mps",
-        name = "EXP-7-Managing-disc-steps",
+        name = "EXP-8-proof-of-concept",
         dir="./wandb_logs",
         notes="Training a GAN for face generation using a simple deconv generator and a fastvit discriminator.",
         config=config.__dict__,  

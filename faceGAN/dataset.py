@@ -21,8 +21,10 @@ class FaceDataset(Dataset):
         if not self.image_files:
             raise ValueError(f"No images found in directory: {image_dir}")
         
+        self.flip_prob = 0.3
         self.to_latent = transforms.Compose([
-            transforms.Resize(128),
+            transforms.RandomResizedCrop(128, scale=(0.9,1.0)),
+            transforms.ColorJitter(brightness=0.1,contrast=0.1,saturation=0.1,hue=0.05),
             transforms.ToTensor(),
             transforms.Normalize(mean=0.5, std=0.5)
             ])
@@ -40,7 +42,11 @@ class FaceDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.image_dir, self.image_files[idx])
-        pil_image = Image.open(img_path).convert('RGB')        
+        pil_image = Image.open(img_path).convert('RGB')   
+
+        if random.random() < self.flip_prob:
+            pil_image = transforms.functional.hflip(pil_image)
+        
         embedding = self.get_embedding(pil_image)
         
         image = self.to_latent(pil_image)
@@ -55,3 +61,4 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
     print(train_dataset.__len__(), "training images found.")
+    print("TinyViT Transform:", train_dataset.transform)

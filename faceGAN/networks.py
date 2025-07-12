@@ -19,6 +19,20 @@ class SimpleDeConvBlock(nn.Module):
         x = self.leaky_relu(x)
         return x
 
+class UpBlock(nn.Module):
+    """
+    Nearest neighbour ↑2 followed by a 3×3 stride-1 conv.
+    PixelNorm (or BatchNorm) + LeakyReLU afterwards.
+    """
+    def __init__(self, in_c, out_c):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='nearest'),           #  H, W  → 2H, 2W
+            nn.Conv2d(in_c, out_c, 3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(out_c),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+    def forward(self, x): return self.net(x)
 
 
 class Generator(nn.Module):
@@ -30,19 +44,20 @@ class Generator(nn.Module):
         
         self.fc = nn.Linear(input_dim, 128*4*4*4)
         self.deconv_blocks = nn.Sequential(
-            SimpleDeConvBlock(512, 256, kernel_size=4, stride=2, padding=1),                     #(batch_size, 512, 4, 4)  ------> (batch_size, 256, 8, 8)
-            SimpleDeConvBlock(256, 128, kernel_size=4, stride=2, padding=1),                     #(batch_size, 256, 8, 8) -----> (batch_size, 128, 16, 16)
-            SimpleDeConvBlock(128, 64, kernel_size=4, stride=2, padding=1),                      #(batch_size, 128, 16, 16) ---> (batch_size, 64,  32, 32)
-            SimpleDeConvBlock(64, 32, kernel_size=4, stride=2, padding=1),                       #(batch_size, 64,  32, 32) ----> (batch_size, 32, 64, 64)
-            nn.ConvTranspose2d(32, output_channels, kernel_size=4, stride=2, padding=1),         #(batch_size, 32, 64, 64) ----> (batch_size, 3, 128, 128)
-            nn.Tanh()  # Output activation
+            SimpleDeConvBlock(512, 512),                     # 512x4x4 → 512x8x8
+            SimpleDeConvBlock(512, 256),                     # 512x8x8 → 256x16x16
+            UpBlock(256, 128),                               # 256x16x16 → 128x32x32
+            UpBlock(128,  64),                               # 128x32x32 → 64x64x64
+            nn.Upsample(scale_factor=2, mode='nearest'),     # 128x32x32 → 128x64x64
+            nn.Conv2d(64, 3, 3, 1, 1),                       # 128x64x64 → 3x64x64
+            nn.Tanh()
         )
         
     def forward(self, x):  # input shape: (batch_size, 512)       
         x = x+ 0.1*torch.randn_like(x)  # Adding noise to the input
         x = self.fc(x)
         x = x.view(-1,128*4,4,4)                        # Reshape to (batch_size, 512, 4, 4)
-        x = self.deconv_blocks(x)                      # output shape: (batch_size, 3, 128, 128)
+        x = self.deconv_blocks(x)                      # output shape: (batch_size, 3, 64, 64)
         return x
 
 
@@ -114,7 +129,8 @@ if __name__ == "__main__":
 
     random_tensor = torch.randn(32, 512)
 
-    output = generator(random_tensor)
+        
+    output =generator(random_tensor)
     print("Generator Output Shape:", output.shape)  
     
     

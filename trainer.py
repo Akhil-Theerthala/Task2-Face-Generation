@@ -10,6 +10,8 @@ from torch.utils.data import DataLoader
 from faceGAN.dataset import FaceDataset
 from faceGAN.networks import Generator, Discriminator, weights_init_normal
 from dataclasses import dataclass
+from time import time
+
 
 os.environ["WANDB_API_KEY"] =dotenv.get_key('.env', 'WANDB_API_KEY')
 
@@ -17,13 +19,13 @@ os.environ["WANDB_API_KEY"] =dotenv.get_key('.env', 'WANDB_API_KEY')
 class TrainingDetails:
     batch_size: int = 128
     val_batch_size: int = 16
-    num_epochs: int = 30
+    num_epochs: int = 1
     discriminator_learning_rate: float = 3e-4
     generator_learning_rate: float = 1e-4
     beta1: float = 0.5
     beta2: float = 0.999
     device: str = 'mps' if torch.backends.mps.is_available() else 'cpu'
-    train_dir: str = 'data/good_baseline_data'
+    train_dir: str = 'data/train'
     val_dir: str = 'data/val'
     
     device = torch.device(device) if torch.cuda.is_available() else torch.device('cpu')
@@ -113,7 +115,9 @@ class Trainer:
         }
     
     def train(self):
+        start = time()
         for epoch in tqdm(range(self.config.num_epochs)):
+            epoch_start = time()
             epoch_loss = {'disc_loss': 0, 'gen_loss': 0}
             batch_step=0
             old_disc_info = {'loss': -1, "real_mean": -1, "fake_mean": -1}
@@ -145,21 +149,37 @@ class Trainer:
             # Log the average loss for the epoch
             epoch_loss['disc_loss'] /= len(self.train_loader)
             epoch_loss['gen_loss'] /= len(self.train_loader)
+            epoch_end = time()
+            
             
             wandb.log({
                 'epoch': epoch + 1,
                 'epoch/avg_disc_loss': epoch_loss['disc_loss'],
-                'epoch/avg_gen_loss': epoch_loss['gen_loss']
+                'epoch/avg_gen_loss': epoch_loss['gen_loss'],
+                'epoch/epoch_time (min)': (epoch_end - epoch_start) / 60  # in minutes
             })
 
-            if (epoch+1)%2 == 0:
+            if (epoch+1)%4 == 0:
                 self.log_generator_images()
                 self.generator.train()
                 
             # Save the model checkpoints
             torch.save(self.generator.state_dict(), 'generator.pth')
             torch.save(self.discriminator.state_dict(), 'discriminator.pth')
-    
+
+        end_of_training = time()
+        #log a wandb table with the training time,  training epochs and GPU details
+        wandb.log(
+            {
+            "epoch/training_details": wandb.Table(
+                data=[[self.config.num_epochs, 
+                       (end_of_training - start) / (60*60),  # in hours
+                       "MacBook Air M4 - 16GB unified memory"]],
+                columns=["epochs", "training_time (hours)", "device used"]
+            )
+        })
+            
+        
     def log_generator_images(self, num_images=16):
         #get a val_batch
         val_batch = next(iter(self.val_loader))
@@ -191,7 +211,7 @@ def main():
     # Initialize wandb
     wandb.init(
         project="face-generation-gan-mps",
-        name = "Unconditional-Baseline-3",
+        name = "Final-Training-Run",
         dir="./wandb_logs",
         notes="Training a GAN for face generation using a simple deconv generator and a fastvit discriminator.",
         config=config.__dict__,  

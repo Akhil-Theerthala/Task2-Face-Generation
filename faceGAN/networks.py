@@ -41,7 +41,7 @@ class Generator(nn.Module):
         self.input_dim = input_dim
         self.output_channels = output_channels
         self.output_image_dim = output_image_dim
-        self.image_dim = 512
+        self.image_dim = 2048
         self.fc = nn.Linear(input_dim, self.image_dim*4*4)
         self.deconv_blocks = nn.Sequential(
             SimpleDeConvBlock(self.image_dim,  self.image_dim//2),                   
@@ -81,11 +81,11 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         
         self.conv_head= nn.Sequential(
-            SimpleConvBlock(3, 32, kernel_size=4, stride=2, padding=1),    #(batch_size, 3, 32, 32) --> (batch_size, 32, 16, 16)
-            SimpleConvBlock(32, 64, kernel_size=4, stride=2, padding=1),  #(batch_size, 32, 16, 16) ----> (batch_size, 64, 8, 8)
-            SimpleConvBlock(64, 128, kernel_size=4, stride=2, padding=1), #(batch_size,  64, 8, 8) -----> (batch_size, 128, 4, 4)
-            SimpleConvBlock(128, 256, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
+            SimpleConvBlock(3, 64, kernel_size=4, stride=2, padding=1),    #(batch_size, 3, 32, 32) --> (batch_size, 32, 16, 16)
+            SimpleConvBlock(64, 128, kernel_size=4, stride=2, padding=1),  #(batch_size, 32, 16, 16) ----> (batch_size, 64, 8, 8)
+            SimpleConvBlock(128, 256, kernel_size=4, stride=2, padding=1), #(batch_size,  64, 8, 8) -----> (batch_size, 128, 4, 4)
             SimpleConvBlock(256, 512, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
+            SimpleConvBlock(512, 512, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
             SimpleConvBlock(512, 1024, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
             nn.Conv2d(1024, 1, kernel_size=2, stride=1, padding=0)  # Final output layer for binary classification
         )
@@ -93,7 +93,7 @@ class Discriminator(nn.Module):
 
     def forward(self, x):
         x = self.conv_head(x)  # Input shape: [batch_size, 3, 128, 128] Output shape: [batch_size, 1, 1, 1]
-        # x = x.view(x.size(0), 1)  # Flatten to [batch_size, 1]
+        x = x.view(x.size(0), 1)  # Flatten to [batch_size, 1]
         return x
 
 def weights_init_normal(m):
@@ -138,4 +138,5 @@ if __name__ == "__main__":
     
     
     disc_output = disc(output)
-    print("Discriminator Output Shape:", disc_output.view(disc_output.size(0), -1).shape) 
+    # print("Discriminator Output Shape:", disc_output.view(disc_output.size(0), -1).shape) 
+    print("Raw Discriminator Output Shape:", disc_output.shape) 

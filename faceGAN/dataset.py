@@ -47,10 +47,10 @@ class FaceDataset(Dataset):
         if random.random() < self.flip_prob:
             pil_image = transforms.functional.hflip(pil_image)
         
-        # embedding = self.get_embedding(pil_image)
+        embedding = self.get_embedding(pil_image)
         
-        #setting up an unconditional_base_line
-        embedding = torch.randn(1,512)
+        # #setting up an unconditional_base_line
+        # embedding = torch.randn(1,512)
         
         image = self.to_latent(pil_image)
         return {

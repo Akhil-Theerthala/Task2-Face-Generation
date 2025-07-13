@@ -211,7 +211,7 @@ def main():
     # Initialize wandb
     wandb.init(
         project="face-generation-gan-mps",
-        name = "Final-Training-Run",
+        name = "Final-Training-Run-v2 (larger_generator)",
         dir="./wandb_logs",
         notes="Training a GAN for face generation using a simple deconv generator and a fastvit discriminator.",
         config=config.__dict__,  

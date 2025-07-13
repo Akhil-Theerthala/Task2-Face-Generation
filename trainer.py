@@ -19,7 +19,7 @@ os.environ["WANDB_API_KEY"] =dotenv.get_key('.env', 'WANDB_API_KEY')
 class TrainingDetails:
     batch_size: int = 128
     val_batch_size: int = 16
-    num_epochs: int = 1
+    num_epochs: int = 15
     discriminator_learning_rate: float = 3e-4
     generator_learning_rate: float = 1e-4
     beta1: float = 0.5
@@ -27,6 +27,7 @@ class TrainingDetails:
     device: str = 'mps' if torch.backends.mps.is_available() else 'cpu'
     train_dir: str = 'data/train'
     val_dir: str = 'data/val'
+    gray_training: bool = True
     
     device = torch.device(device) if torch.cuda.is_available() else torch.device('cpu')
 
@@ -40,14 +41,23 @@ class Trainer:
         else:
             print("MPS backend not available, using CPU.")
         
-        self.train_dataset = FaceDataset(self.config.train_dir)
-        self.train_loader = DataLoader(self.train_dataset, batch_size=self.config.batch_size, shuffle=True)
-        self.val_dataset = FaceDataset(self.config.val_dir)
-        self.val_loader = DataLoader(self.val_dataset, batch_size=self.config.val_batch_size, shuffle=False)
+        self.train_dataset = FaceDataset(self.config.train_dir,
+                                         gray=self.config.gray_training)
+        
+        self.train_loader = DataLoader(self.train_dataset,
+                                       batch_size=self.config.batch_size,
+                                       shuffle=True
+                                       )
+        
+        self.val_dataset = FaceDataset(self.config.val_dir, 
+                                       gray=self.config.gray_training, 
+                                       train=False)
+        self.val_loader = DataLoader(self.val_dataset, 
+                                     batch_size=self.config.val_batch_size, shuffle=False)
         
         # Initialize the generator and discriminator
-        self.generator = Generator().to(self.config.device)
-        self.discriminator = Discriminator().to(self.config.device)
+        self.generator = Generator(output_channels=1).to(self.config.device)
+        self.discriminator = Discriminator(input_channels=1).to(self.config.device)
         
         #apply weight initialization
         self.generator.apply(weights_init_normal)
@@ -164,8 +174,8 @@ class Trainer:
                 self.generator.train()
                 
             # Save the model checkpoints
-            torch.save(self.generator.state_dict(), 'generator.pth')
-            torch.save(self.discriminator.state_dict(), 'discriminator.pth')
+            torch.save(self.generator.state_dict(), 'models/generator_gray_512.pth')
+            # torch.save(self.discriminator.state_dict(), 'discriminator.pth')
 
         end_of_training = time()
         #log a wandb table with the training time,  training epochs and GPU details
@@ -211,7 +221,7 @@ def main():
     # Initialize wandb
     wandb.init(
         project="face-generation-gan-mps",
-        name = "Final-Training-Run-v2 (larger_generator)",
+        name = "Experiment-9-Grayscale-Image-Generator",
         dir="./wandb_logs",
         notes="Training a GAN for face generation using a simple deconv generator and a fastvit discriminator.",
         config=config.__dict__,  

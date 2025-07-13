@@ -41,7 +41,7 @@ class Generator(nn.Module):
         self.input_dim = input_dim
         self.output_channels = output_channels
         self.output_image_dim = output_image_dim
-        self.image_dim = 1024
+        self.image_dim = 512
         self.fc = nn.Linear(input_dim, self.image_dim*4*4)
         self.deconv_blocks = nn.Sequential(
             SimpleDeConvBlock(self.image_dim,  self.image_dim//2),                   
@@ -51,7 +51,7 @@ class Generator(nn.Module):
             UpBlock(self.image_dim//16, self.image_dim//32),                             
             # UpBlock(128,  64),                           
             # nn.Upsample(scale_factor=1, mode='nearest'),     
-            nn.Conv2d(self.image_dim//32, 3, 3, 1, 1),  
+            nn.Conv2d(self.image_dim//32, output_channels, 3, 1, 1),  
             nn.Tanh()
         )
         
@@ -77,17 +77,19 @@ class SimpleConvBlock(nn.Module):
 
 #using a simple fastvit image encoder for discriminator
 class Discriminator(nn.Module):
-    def __init__(self):
+    def __init__(self, input_channels=3):
         super(Discriminator, self).__init__()
         
+        self.start_dim = 32
+        
         self.conv_head= nn.Sequential(
-            SimpleConvBlock(3, 64, kernel_size=4, stride=2, padding=1),    #(batch_size, 3, 32, 32) --> (batch_size, 32, 16, 16)
-            SimpleConvBlock(64, 128, kernel_size=4, stride=2, padding=1),  #(batch_size, 32, 16, 16) ----> (batch_size, 64, 8, 8)
-            SimpleConvBlock(128, 256, kernel_size=4, stride=2, padding=1), #(batch_size,  64, 8, 8) -----> (batch_size, 128, 4, 4)
-            SimpleConvBlock(256, 256, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
-            SimpleConvBlock(256, 512, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
-            SimpleConvBlock(512, 1024, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
-            nn.Conv2d(1024, 1, kernel_size=2, stride=1, padding=0)  # Final output layer for binary classification
+            SimpleConvBlock(input_channels, self.start_dim, kernel_size=4, stride=2, padding=1),    #(batch_size, 3, 32, 32) --> (batch_size, 32, 16, 16)
+            SimpleConvBlock(self.start_dim, self.start_dim*2, kernel_size=4, stride=2, padding=1),  #(batch_size, 32, 16, 16) ----> (batch_size, 64, 8, 8)
+            SimpleConvBlock(self.start_dim*2, self.start_dim*4, kernel_size=4, stride=2, padding=1), #(batch_size,  64, 8, 8) -----> (batch_size, 128, 4, 4)
+            SimpleConvBlock(self.start_dim*4, self.start_dim*4, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
+            SimpleConvBlock(self.start_dim*4, self.start_dim*8, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
+            SimpleConvBlock(self.start_dim*8, self.start_dim*16, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
+            nn.Conv2d(self.start_dim*16, 1, kernel_size=2, stride=1, padding=0)  # Final output layer for binary classification
         )
 
 
@@ -127,8 +129,8 @@ def weights_init_normal(m):
 
 
 if __name__ == "__main__":
-    generator = Generator()
-    disc = Discriminator()
+    generator = Generator(output_channels=1)
+    disc = Discriminator(input_channels=1)
 
     random_tensor = torch.randn(32,512)
 

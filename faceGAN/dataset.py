@@ -9,9 +9,8 @@ from torchvision import transforms
 from PIL import Image
 
 random.seed(42)  # For reproducibility
-
 class FaceDataset(Dataset):
-    def __init__(self, image_dir):
+    def __init__(self, image_dir, gray=False, train = True):
         self.image_dir = image_dir
         self.image_files = [f for f in os.listdir(image_dir) if f.endswith('.jpg')]
         
@@ -22,15 +21,28 @@ class FaceDataset(Dataset):
             raise ValueError(f"No images found in directory: {image_dir}")
         
         self.flip_prob = 0.3
-        self.to_latent = transforms.Compose([
+        
+        self.to_latent_train = transforms.Compose([
+            transforms.Grayscale(num_output_channels=1) if gray else transforms.Lambda(lambda x: x),
             transforms.RandomResizedCrop(128, scale=(0.9,1.0)),
             transforms.ColorJitter(brightness=0.1,contrast=0.1,saturation=0.1,hue=0.05),
             transforms.ToTensor(),
             transforms.Normalize(mean=0.5, std=0.5)
             ])
+
+        self.to_latent_val = transforms.Compose([
+            transforms.Grayscale(num_output_channels=1) if gray else transforms.Lambda(lambda x: x),
+            transforms.Resize((128, 128)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=0.5, std=0.5)
+        ])
         
-    
+        self.to_latent = self.to_latent_train if train else self.to_latent_val
+        
     def get_embedding(self, image):
+        
+        #can't use mps device as the model has a few layers that are not yet supported by mps in torch...
+        
         with torch.inference_mode():
             image = self.transform(image).unsqueeze(0)
             embedding = self.embedding_model(image)
@@ -57,7 +69,7 @@ class FaceDataset(Dataset):
             'image': image,
             'embedding': embedding
         }
-    
+
 
 if __name__ == "__main__":    
     train_dataset = FaceDataset('data/train')

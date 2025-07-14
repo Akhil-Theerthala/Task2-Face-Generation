@@ -26,7 +26,7 @@ class TrainingDetails:
     generator_learning_rate: float = 6e-4
     beta1: float = 0.5
     beta2: float = 0.999
-    device: str = 'mps' if torch.backends.mps.is_available() else 'cpu'
+    device: str = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
     train_dir: str = 'data/train'
     val_dir: str = 'data/val'
     gray_training: bool = True

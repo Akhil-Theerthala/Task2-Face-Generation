@@ -17,6 +17,7 @@ class FaceDataset(Dataset):
         self.embedding_model = timm.create_model("hf_hub:gaunernst/vit_tiny_patch8_112.arcface_ms1mv3", pretrained=True).eval()
         self.data_config = timm.data.resolve_data_config(self.embedding_model.pretrained_cfg)
         self.transform = timm.data.create_transform( **self.data_config, is_training=False)
+        
         if not self.image_files:
             raise ValueError(f"No images found in directory: {image_dir}")
         
@@ -47,6 +48,7 @@ class FaceDataset(Dataset):
             image = self.transform(image).unsqueeze(0)
             embedding = self.embedding_model(image)
             embedding = F.normalize(embedding, dim=1)
+        
         return embedding.squeeze(0) # From [1, 512] to [512]
             
     def __len__(self):
@@ -59,10 +61,10 @@ class FaceDataset(Dataset):
         if random.random() < self.flip_prob:
             pil_image = transforms.functional.hflip(pil_image)
         
-        embedding = self.get_embedding(pil_image)
+        # embedding = self.get_embedding(pil_image)
         
         # #setting up an unconditional_base_line
-        # embedding = torch.randn(1,512)
+        embedding = torch.randn(1,512)
         
         image = self.to_latent(pil_image)
         return {

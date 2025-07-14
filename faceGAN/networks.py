@@ -87,9 +87,9 @@ class Discriminator(nn.Module):
             SimpleConvBlock(self.start_dim, self.start_dim*2, kernel_size=4, stride=2, padding=1),  #(batch_size, 32, 16, 16) ----> (batch_size, 64, 8, 8)
             SimpleConvBlock(self.start_dim*2, self.start_dim*4, kernel_size=4, stride=2, padding=1), #(batch_size,  64, 8, 8) -----> (batch_size, 128, 4, 4)
             SimpleConvBlock(self.start_dim*4, self.start_dim*4, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
-            # SimpleConvBlock(self.start_dim*4, self.start_dim*8, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
-            # SimpleConvBlock(self.start_dim*8, self.start_dim*16, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
-            nn.Conv2d(self.start_dim*4, 1, kernel_size=2, stride=1, padding=0)  # Final output layer for binary classification
+            SimpleConvBlock(self.start_dim*4, self.start_dim*8, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
+            SimpleConvBlock(self.start_dim*8, self.start_dim*16, kernel_size=4, stride=2, padding=1), #(batch_size, 128, 4, 4) -----> (batch_size, 256, 2, 2)
+            nn.Conv2d(self.start_dim*16, 1, kernel_size=2, stride=1, padding=0)  # Final output layer for binary classification
         )
 
 

@@ -271,7 +271,7 @@ def main():
     # Initialize wandb
     wandb.init(
         project="face-generation-gan-mps",
-        name = "EXP-9-Grayscale-32x32",
+        name = "EXP-10-Unconditional-Grayscale-32x32",
         dir="./wandb_logs",
         notes="Training a GAN for face generation using a simple deconv generator and a fastvit discriminator.",
         config=config.__dict__,  

@@ -10,7 +10,7 @@ from PIL import Image
 
 random.seed(42)  # For reproducibility
 class FaceDataset(Dataset):
-    def __init__(self, image_dir, gray=False, train = True):
+    def __init__(self, image_dir, gray=False, train = True, image_size=128):
         self.image_dir = image_dir
         self.image_files = [f for f in os.listdir(image_dir) if f.endswith('.jpg')]
         
@@ -21,10 +21,10 @@ class FaceDataset(Dataset):
             raise ValueError(f"No images found in directory: {image_dir}")
         
         self.flip_prob = 0.3
-        
+        self.image_size = image_size
         self.to_latent_train = transforms.Compose([
             transforms.Grayscale(num_output_channels=1) if gray else transforms.Lambda(lambda x: x),
-            transforms.RandomResizedCrop(128, scale=(0.9,1.0)),
+            transforms.RandomResizedCrop(self.image_size, scale=(0.9,1.0)),
             transforms.ColorJitter(brightness=0.1,contrast=0.1,saturation=0.1,hue=0.05),
             transforms.ToTensor(),
             transforms.Normalize(mean=0.5, std=0.5)
@@ -32,7 +32,7 @@ class FaceDataset(Dataset):
 
         self.to_latent_val = transforms.Compose([
             transforms.Grayscale(num_output_channels=1) if gray else transforms.Lambda(lambda x: x),
-            transforms.Resize((128, 128)),
+            transforms.Resize((self.image_size, self.image_size)),
             transforms.ToTensor(),
             transforms.Normalize(mean=0.5, std=0.5)
         ])

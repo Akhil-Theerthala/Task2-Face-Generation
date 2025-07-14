@@ -18,7 +18,7 @@ The goal of this task is to develop a face generation model that takes face-embe
       - **Phase-1**: Discriminator dominated the training, making the generator produce close to random noise as the outputs.
       - **Phase-2**: The balance between the generator and discriminator was achieved, but the outputs still weren't different from random noise. However, some qualitative results show that a sillouette of a face is being generated.****
       - **Phase-3**: Dataset expansion phase. The earlier two phases were trained on a small dataset of around 4000 images. The dataset in this phase was expanded to around 15-16k images. Then, two generators were trained with to provide **detailed** analysis.
-      - **Gray-scale training**: After training the "Final-run" of the face generation model specified, another experment was done to train the model to generate gray-scale features. This was done to see if the model can learn the features of a face better if it were to be in gray-scale. 
+      - **Gray-scale training**: After training the "Final-run" of the face generation model specified, another experment was done to train the model to generate gray-scale features. This as done to see if the target space simplification can help the model learn the features of a face better. The results in fact showed that rather than trying to generated color images, the model was able to generate more "face-like" images. w
 
 ## Results
 
@@ -41,7 +41,7 @@ The goal of this task is to develop a face generation model that takes face-embe
 - These changes were able to produce a stable interplay between the generator and discriminator, and also push the generator to at least produce a "silloutette" of a face, which often included bright patches that resembled the face location similar to the input images (though no actual features of a face).
 - This architecutre was then trained through an Unconditional training on high-quality sampled (~8k) CELEBA dataset, to establish a baseline on how good the model can perform in an ideal scenario. **This baseline was used to establish a hypothesis that the model cannot perform well on the current dataset size and complexity.** This can be verified by the WandB dashboards titled "Unconditional-Baseline-1" and "Unconditional-Baseline-2" in the WandB project linked below.
 - Based on this fact, a reasonable expansion of the 4k dataset was done to 16k, and the final training run was done. The final training run was done in two phases, with the same generator and discriminator architecture, but with different scale of the generators. The first phase used a smaller inital channel expansion of 512, while the second phase used a larger initial channel expansion of 1024.
-- The final generations are available in the `inference_visualization.ipynb` file.
+- Finally, an experiment was done to simplify the target space, by training the model to generate gray-scale images. This was done to see if the model can learn the features of a face better by simplifying the target space. The results showed that the model was able to generate more "face-like" images, and was satisfactory, indicating the the model development was in the right direction, and could generate realistic faces given relaxed time constraints (or) higher compute.
 
 ## LLM Usage
 
@@ -54,7 +54,7 @@ The goal of this task is to develop a face generation model that takes face-embe
 - **Qualitative Evaluation**: Images generated after every few epochs are available in the dashboard and `inference_visualization.ipynb`. The final images show approximate face silhouettes but no distinct facial features
 - **Quantitative Scores**: For the sake of a quantitative evaluation, a validation set of 1100 faces was used. The quantitative measurements were based on the cosine similarity between the generated face embeddings and the original face embeddings, trying to see if any of the generated faces contain some features of a face.
 - Though the cosine similarity scores are not ideal as they are between two different faces, but they can act as a proxy measure of how close the generated face is to a real face. If they are too close, then that means the generated image is an exact copy of the original image. However, since some noise is introduced in the generation process, this can be avoided. For the current model, the average cosine similarity is 0.15, which means that the generated images are very different from the faces in the validation set.
-- Other metrics like FID and KID were not used as the jupyter kernel was repeatedly crashing while calculating these metrics. 
+- Other metrics like FID and KID were not used as the jupyter kernel was repeatedly crashing while calculating these metrics.
 
 ## WandB dashboards and Image samples
 
